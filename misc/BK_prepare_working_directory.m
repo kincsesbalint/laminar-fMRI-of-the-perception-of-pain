@@ -10,8 +10,10 @@ outputdata=strcat(outpath,'\',(rawfilenms(:,1:end-3)));
 
 gunzip(cellstr(data),outpath);
 %smooth the data locally.
-parfor vol=1:height(outputdata)
-    spm_smooth(outputdata(vol,:),outputdata(vol,:),smoothingkernel);
+if smoothingkernel~=0
+    parfor vol=1:height(outputdata)
+        spm_smooth(outputdata(vol,:),outputdata(vol,:),smoothingkernel);
+    end
 end
 
 end

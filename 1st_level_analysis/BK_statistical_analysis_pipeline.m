@@ -20,13 +20,18 @@ function BK_statistical_analysis_pipeline(subject)
 % 
 % 
 % Previous runs:
+%   - 10.2024: 34 subjects data were analyzed and saved in the external HD (...ELHID/ses-02\func\layers\rwls_stats_(compcor_)smoothed_hpf180)
+%       used arguments:
+%           - smooting kernel size (4mm)
+%           - with and without compcor regressors
+%           - HPfilter cutoff: 180sec
 %   - 08.2024: 33 subjects data were analyzed and saved in the external HD (...ELHID/ses-02\func\layers\rwls_stats_compcor_smoothed)
 %       used arguments:
 %           - smooting kernel size (4mm)
 %           - compcor regressors
 %           - HPfilter cutoff: 400sec
 %
-% The followings need to be specified before starting the script:
+% The followings need to be specified before starting this script:
 %   1. The participan ELH ID. One can specifiy multiple participant, they
 %   will analyzed sequentially.
 %   2. smoothing kernel size
