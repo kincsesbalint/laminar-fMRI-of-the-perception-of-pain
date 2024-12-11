@@ -12,9 +12,10 @@
 clear;clc;
 tic
 
-subjects = {'7408','7414','7415','7425','7426','7433','7434','7435','7443','7444','7445','7448','7449', '7452','7453',...
-    '7454','7455','7456','7457','7468','7469','7482','7484','7349','7361','7375',...
-    '7383','7402','7403','7404','7405','7356','7485'};
+% subjects = {'7408','7414','7415','7425','7426','7433','7434','7435','7443','7444','7445','7448','7449', '7452','7453',...
+%     '7454','7455','7456','7457','7468','7469','7482','7484','7349','7361','7375',...
+%     '7383','7402','7403','7404','7405','7356','7485'};
+subjects = {'7349'};
 for subject = subjects
     
     %IMPORTANT that the two external HD plugged in the "right" position as
@@ -38,7 +39,7 @@ if nargin < 2
     ZTRANS = false;
 end
 layerpath = [subpath '/ses-02/func/layers'];
-load([layerpath '/smoothed_layers.mat'],'layers');
+load([layerpath '/layers.mat'],'layers');
 
 [N_layers,N_ROIS,~,N_runs] = size(layers);
 N_contrasts = 20; %one contrast per trial

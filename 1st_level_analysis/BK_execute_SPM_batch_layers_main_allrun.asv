@@ -166,10 +166,10 @@ matlabbatch{3}.spm.stats.con.consess{3}.tcon.weights = [0 0 -1 1 1 -1 0]; %this 
 % matlabbatch{3}.spm.stats.con.consess{3}.tcon.weights = [0 0 0.5 -0.5 -0.5 0.5 0]; %never used this part 
 matlabbatch{3}.spm.stats.con.consess{3}.tcon.sessrep = 'both';
 
-% matlabbatch{3}.spm.stats.con.consess{4}.tcon.name = 'maineffectofcognition_lcminhc';
-% matlabbatch{3}.spm.stats.con.consess{4}.tcon.weights = [0 0 -1 -1 1 1 0];
-% % matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = [0 0 0.5 0.5 -0.5 -0.5 0];%never used this part 
-% matlabbatch{3}.spm.stats.con.consess{4}.tcon.sessrep = 'both';
+matlabbatch{3}.spm.stats.con.consess{1}.tcon.name = 'maineffectofcognition_lcminhc';
+matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = [0 0 -1 -1 1 1 0];
+% matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = [0 0 0.5 0.5 -0.5 -0.5 0];%never used this part 
+matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep = 'both';
     %the order of the trial tpyes are the following:
 %     {'anticipation_high_cognition'}
 %     {'anticipation_low_cognition' }
