@@ -57,12 +57,15 @@ function BK_ROI_creation_GROUPLVLactivationconj(subid,subpath,fspath,T1path,visu
         %todo check the code from here:
         fprintf(sprintf('Starting layer sampling...\n'));
 %         tic
+        tic
         [columnspecificts,layeractivation,allroicolumnsize]= BK_select_active_columns_basedonts(subid,subpath,layer_boundaries,ROIs,N_layers, T1_mat);
-%         fprintf('time for layer sampling:')
+        fprintf('time for layer sampling:')
         %~500sec
-%         toc
-        interimdata_columns=struct('columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
-        save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
+        toc
+        interimdata_columns ={columnspecificts,layeractivation,allroicolumnsize};
+        save([outputpath 'interimdata_rwls_pIns.mat'], 'interimdata_columns');
+%         interimdata_columns=struct('columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
+%         save([outputpath 'interimdata_rwls_pIns.mat'],'interimdata_columns');
 %         tic
 %         load('C:\Users\lenov\Documents\layerfMRI_DATA\groupavg_correctBET\7426\functionalmasks\interimdata_rwls.mat')
 %         columnspecificts=interimdata_columns.columnspecificts;
@@ -104,6 +107,7 @@ function BK_ROI_creation_GROUPLVLactivationconj(subid,subpath,fspath,T1path,visu
         
 %         save([outputpath 'interimdata_rwls.mat'],'interimdata');
         if visualize
+            activevoxelsid=interimdata_columns{1}.activevoxelids;
             BK_plotactiveclusterscolumn(T1path,ROIs,activevoxelsid,layer_boundaries,outputpath)
         end
 
@@ -327,6 +331,8 @@ function [columns_out,layers_out,allroicolumnsize] = BK_select_active_columns_ba
         N_vols(run) = length(sampled_img_list{run});
     end
     tic
+    layers_out=cell(N_ROI,1);
+    columns_out=cell(N_ROI,1);
     fullvol=1;
     for run=1:N_run
         fprintf(sprintf(['run ' num2str(run) '...']));
@@ -340,9 +346,12 @@ function [columns_out,layers_out,allroicolumnsize] = BK_select_active_columns_ba
                 ind = find(ROIs(:,ROI)); %columns under the group lvl mask
                 tmp = zeros(size(ind,1),N_layers);
                 boundaries = layer_boundaries;
-                if run==1 && ROI==1 && vol==1
-                    columns_out = zeros([length(ind),N_ROI,sum(N_vols)]);
-                    layers_out = zeros([length(ind),N_layers,N_ROI,sum(N_vols)]);
+%                 if run==1 && ROI==1 && vol==1
+                if run==1 && vol==1
+%                     columns_out = zeros([length(ind),N_ROI,sum(N_vols)]);
+                    columns_out{ROI,1} = zeros([length(ind),sum(N_vols)]);
+%                     layers_out = zeros([length(ind),N_layers,N_ROI,sum(N_vols)]);
+                    layers_out{ROI,1} = zeros([length(ind),N_layers,sum(N_vols)]);
                     columnsize=nan(1,size(ind,1));
                 end
                
@@ -354,6 +363,7 @@ function [columns_out,layers_out,allroicolumnsize] = BK_select_active_columns_ba
 %         % too small is OK??)
     %we go here from vertex to vertex(==column to column), and sample the funcitonal images. Here we should include an additional function, to select only columns active mostly in the deep layer. However, this need to be happen on the unsmoothed main effects (smoothed actually is available) conjuction map. That is calculate indiviudal conjuction maps, and apply the mask on those and estimate the layer profile. However, we would need to have a decent t value at the deeper part of the cortex. (my gut feeleing that interpolate statistical map is not that correct.-think about it a bit more)
                 for k = 1:size(ind,1) 
+                    %sanity check of the cooridnates 
                     X  = linspace(boundaries(ind(k),1,1),boundaries(ind(k),1,2),N_layers);
                     Y  = linspace(boundaries(ind(k),2,1),boundaries(ind(k),2,2),N_layers);
                     Z  = linspace(boundaries(ind(k),3,1),boundaries(ind(k),3,2),N_layers);
@@ -374,10 +384,13 @@ function [columns_out,layers_out,allroicolumnsize] = BK_select_active_columns_ba
                     allroicolumnsize{ROI}=columnsize;
                 end
     %             layers_out(:,ROI,vol,run) = squeeze(mean(tmp,1,'omitnan'));
-                layers_out(:,:,ROI,fullvol) = tmp;
-                columns_out(:,ROI,fullvol) = mean(tmp(:,1:15),2,'omitnan'); %15 is hardcoded here as Peter recommended to skip the top 0.75mm, which would be in case of 3mm avg thickness the same as 15/20.It can be adjusted later by the thickness of the column as we can easily calculate that.
-                fullvol=fullvol+1;
+%                 layers_out(:,:,ROI,fullvol) = tmp;
+                layers_out{ROI}(:,:,fullvol) = tmp;
+%                 columns_out(:,ROI,fullvol) = mean(tmp(:,1:15),2); % ,'omitnan' - 15 is hardcoded here as Peter recommended to skip the top 0.75mm, which would be in case of 3mm avg thickness the same as 15/20.It can be adjusted later by the thickness of the column as we can easily calculate that.
+                columns_out{ROI}(:,fullvol) = mean(tmp(:,1:15),2); % ,'omitnan' - 15 is hardcoded here as Peter recommended to skip the top 0.75mm, which would be in case of 3mm avg thickness the same as 15/20.It can be adjusted later by the thickness of the column as we can easily calculate that.
+                
             end
+            fullvol=fullvol+1;
         end
         toc
         fprintf(sprintf(' done \n'));
