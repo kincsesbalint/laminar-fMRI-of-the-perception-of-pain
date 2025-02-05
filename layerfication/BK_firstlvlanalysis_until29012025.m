@@ -1,379 +1,290 @@
-function [columnwisestat,columndistribution,layerwisestat] = BK_firstlvlanalysis(subid,subpath,fspath,T1path,visualizationtype,region)
-% This funtion is called by the BK_layer_sampling_pain_study_pipeline
-% function. The aim of this function is to do parameter estimation of columnar and layer level
-% information. The input of this data is saved in the indiviudal files as
-% interimdata_rwls_'ROINAME'(raw).mat. This contains many information
-% regarding vertex wise (only taking the deeper 75% of the timeseries, laminar timeseries from each vertex, and the size of the
-% mask (as the number of vertices). The script process ROI wise...
+function [columnwisestat,columndistribution,layerwisestat] = BK_firstlvlanalysis(subid,subpath,fspath,T1path,visualize,region,N_layers)
+%
 % ToDo: THe function ToDo description
 % 
-%
+% This is a adaptation of VPF's similarly called function (VPF__layer_sampling_pain_study)., but the functional ROIs(based on smoothed group level result)
+% were used on the unsmoothed data, to find columns which activate.
+% The ROI
+% Function to sample layers within predefined regions (see VPF_ROI_creation.m). 
+% It loads freesurfer surfaces, transforms ROI volumetric .nii to surfaces 
+% and samples layers of images saved in folders with 'run' in their name
 %INPUT:
-% subid [str]                : subject id
-% subpath [str]              : path to the derivatives folder
-% fspath [str]               : path to the freesurfer folder
-% T1path [str]               : full path and filename of the T1 image
-% visualize [integer]        : 0-do not create, 1-create image of the
-% selected vertices          
-% region [string]            :the region of interest
-% e.g.:S1,S2,pIns,DLPFC,...
-% N_layers [int] optional    :number of layers to be sampled (default: 20)
+%subid [str]                : subject id
+%subpath [str]              : path to the derivatives folder
+%fspath [str]               : path to the freesurfer folder
+%T1path [str]               : full path and filename of the T1 image
+%N_layers [int] optional    :number of layers to be sampled (default: 20)
 %OUTPUT:
 % activatedcolumns [column_index N_ROI contrastofinterest(cogn,pain)
 % N_estimation(reml,rwsl)] : the fitted 
 %
-% Example call:
-% [columnwisestat,columndistribution,layerwisestat]=BK_firstlvlanalysis(subid{:},subpath,fspath,T1path,0,region)
+% 
 % 
 % Balint Kincses
-% balint.kincses@uk-essen.de
 % 12.2024
     if ~ischar(subid)
         subid = char(string(subid));
     end
-   
-    N_layers = 20;
-   
+    if nargin < 7
+        N_layers = 20;
+    end
     roipath='C:\Users\lenov\Documents\layerfMRI_DATA\groupavg_correctBET\';
     outputpath=[roipath subid '\functionalmasks\'];
 
-    load([outputpath 'interimdata_rwls_' region 'raw.mat'],'interimdata_columns')
-    columnspecificts=interimdata_columns{1};
-    sz=size(columnspecificts{1,1});
-    if sz(2)~=1221
-        warning('The ts is shorter!!! why?')
-    end
+% %     if ~exist([outputpath 'interimdata_rwls.mat'],'file')
+% %         tic
+%         %load boundaries coming from freesurfer
+%         layer_boundaries = VPF_load_layer_boundaries(subid,fspath);
+% %         fprintf('time for loading:')
+%         %~0sec
+% %         toc
+%         % load ROIs coming from the group average activation
+%         % time for converting:Elapsed time is 92.710407 seconds.
+% %         tic
+%         ROIs = BK_convert_load_ROIs(subid,roipath,fspath,size(layer_boundaries,1));
+%         fprintf('Size of different ROIs:%i\n', [sum(ROIs,1)])
+% %         fprintf('time for converting:')
+%         %~4sec
+% %         toc
+%         %transform boundaries to matlab space (from freesurfer space), the
+%         %resulting space will be in "voxel coordinate". It also outputs the 
+% %         tic
+%         [layer_boundaries,T1_mat] = VPF_transform_layers_to_matlab_space(layer_boundaries,T1path);
+% %         fprintf('time for transforming:')
+%         %~0sec
+% %         toc
+%         %sample layers
+%         %todo check the code from here:
+%         fprintf(sprintf('Starting layer sampling...\n'));
+% %         tic
+%         [columnspecificts,layeractivation,allroicolumnsize]= BK_select_active_columns_basedonts(subid,subpath,layer_boundaries,ROIs,N_layers, T1_mat);
+% %         fprintf('time for layer sampling:')
+%         %~500sec
+% %         toc
+%         interimdata_columns=struct('columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
+%         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
+%         tic
+        %define inputs
+        %% S1 stuff
+        if strcmp(region,'S1')
+            load([outputpath 'interimdata_rwls.mat'],'interimdata_columns')
+            columnspecificts=interimdata_columns.columnspecificts;
+            sz=size(columnspecificts);
+            if sz(3)~=1221
+                warning('The ts is shorter!!! why?')
+            end
+            layeractivation=interimdata_columns.layeractivation;
+            columnsize=interimdata_columns.allroicolumnsize;
+            %-----------------------------------------------------------------------------------------------%
+            %check if the profile depends on the way we select the voxels:
+%             wholecolumnactivation=mean(layeractivation(:,10:20,:,:),2);
+%             [ncol,~,~,tslengt]=size(layeractivation);
+%             wholecolumnactivationts=reshape(wholecolumnactivation,ncol,1,tslengt);%size(muki)
+%             [T,Tcrit,beta,pmax] = BK_column_analysis_stats(wholecolumnactivationts,subid,subpath);
+            %-----------------------------------------------------------------------------------------------%
+            [T,Tcrit,beta,pmax] = BK_column_analysis_stats(columnspecificts,subid,subpath);
+            T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
+            columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
     
-    layeractivation=interimdata_columns{2};
-    columnsize=interimdata_columns{3};
-    [T,Tcrit,beta,pmax] = BK_column_analysis_stats_roicell(columnspecificts,subid,subpath);
-    T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
-    columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-    %go through all the "ROI" (this would mena left and right in the
-    %current implementation, and each anatomical ROI should be called
-    %separately)
-    for ROI=1:length(layeractivation)
-        numberofcolumnsinmask=length(columnsize{ROI,1});
-        tthrsss=[0 1];
-        thrsidx=0;
-        for tthrs=tthrsss
-            thrsidx=thrsidx+1;
-            numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,ROI,1)>tthrs);
+    %         interimdata_columns=struct('columnwisestat',columnwisestat,'columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
+    %         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
             
-            numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,ROI,2)>tthrs);
+    
+            numberofcolumnsinmask=length(columnsize);
+            tthrsss=[0 1];
+            thrsidx=0;
+            for tthrs=tthrsss
+                thrsidx=thrsidx+1;
+                numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,1,1)>tthrs);
+                
+                numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,1,2)>tthrs);
+                
+                numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,1,3)>tthrs);
+                activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
+    %             disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
+    %             disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
+    %             disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
+    %             disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
+            end
             
-            numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,ROI,3)>tthrs);
-            activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
-            disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
-            disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
-            disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
-            disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
-            disp('-------------------------------------------------------------')
+            columndistribution = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
+                                        'numberofpainactivecolumns',numberofpainactivecolumns, ...
+                                        'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
+                                        'numberofcolumnsinmask',numberofcolumnsinmask);
+    
+    %         estimate model params of active columns
+            topcolumnnumber=200; %200
+           
+            [top200Values, top200Indices] =maxk(columnwisestat.T(:,1,3),topcolumnnumber);
+    
+            % Filter the indices where the values are positive
+            positiveIndices = top200Indices(top200Values > 0);
+            % Check if any negative values were removed
+            if length(positiveIndices) < topcolumnnumber
+                warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
+            end
+        
+    %         tic
+            sz=size(layeractivation);
+            layerts_significant=mean(layeractivation(positiveIndices,:,:,:),1,'omitnan'); 
+            layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
+            [T,Tcrit,beta,pmax] = BK_layer_analysis_stats(layerts_significant_forfunc,subid,subpath);
+            layerwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
+%         layerwisestat = [];
+        %% pIns stuff
+        elseif strcmp(region,'pIns')
+            load([outputpath 'interimdata_rwls_pIns.mat'],'interimdata_columns')
+            columnspecificts=interimdata_columns{1};
+            sz=size(columnspecificts{1,1});
+            if sz(2)~=1221
+                warning('The ts is shorter!!! why?')
+            end
+            layeractivation=interimdata_columns{2};
+            columnsize=interimdata_columns{3};
+            [T,Tcrit,beta,pmax] = BK_column_analysis_stats_roicell(columnspecificts,subid,subpath);
+            T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
+            columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
+    
+    %         interimdata_columns=struct('columnwisestat',columnwisestat,'columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
+    %         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
+            
+            for ROI=1:length(layeractivation)
+                numberofcolumnsinmask=length(columnsize{ROI,1});
+                tthrsss=[0 1];
+                thrsidx=0;
+                for tthrs=tthrsss
+                    thrsidx=thrsidx+1;
+                    numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,ROI,1)>tthrs);
+                    
+                    numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,ROI,2)>tthrs);
+                    
+                    numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,ROI,3)>tthrs);
+                    activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
+                    disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
+                    disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
+                    disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
+                    disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
+                end
+                
+                columndistribution{ROI} = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
+                                            'numberofpainactivecolumns',numberofpainactivecolumns, ...
+                                            'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
+                                            'numberofcolumnsinmask',numberofcolumnsinmask);
+            
+        %         estimate model params of active columns
+                topcolumnnumber=200; %200 or 100?
+               
+                [top200Values, top200Indices] =maxk(columnwisestat.T(:,ROI,3),topcolumnnumber);
+        
+                % Filter the indices where the values are positive
+                positiveIndices = top200Indices(top200Values > 0);
+                % Check if any negative values were removed
+                if length(positiveIndices) < topcolumnnumber
+                    warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
+                end
+                layerts=layeractivation{ROI,1};
+        %         tic
+                sz=size(layerts);
+                layerts_significant=mean(layerts(positiveIndices,:,:),1); %,'omitnan'
+                layerts_significant=squeeze(layerts_significant);
+        %         layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
+                [T,Tcrit,beta,pmax] = BK_layer_analysis_stats_roicell(layerts_significant,subid,subpath);
+                layerwisestat{ROI} = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
+        %         layerwisestat = [];
+            end
+    
+        
+            fprintf('time for laminar activation:')
+            toc
+        elseif strcmp(region,'S2')
+            load([outputpath 'interimdata_rwls_S2.mat'],'interimdata_columns')
+            columnspecificts=interimdata_columns{1};
+            sz=size(columnspecificts{1,1});
+            if sz(2)~=1221
+                warning('The ts is shorter!!! why?')
+            end
+            layeractivation=interimdata_columns{2};
+            columnsize=interimdata_columns{3};
+            [T,Tcrit,beta,pmax] = BK_column_analysis_stats_roicell(columnspecificts,subid,subpath);
+            T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
+            columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
+    
+    %         interimdata_columns=struct('columnwisestat',columnwisestat,'columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
+    %         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
+            
+            for ROI=1:length(layeractivation)
+                numberofcolumnsinmask=length(columnsize{ROI,1});
+                tthrsss=[0 1];
+                thrsidx=0;
+                for tthrs=tthrsss
+                    thrsidx=thrsidx+1;
+                    numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,ROI,1)>tthrs);
+                    
+                    numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,ROI,2)>tthrs);
+                    
+                    numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,ROI,3)>tthrs);
+                    activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
+                    disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
+                    disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
+                    disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
+                    disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
+                end
+                
+                columndistribution{ROI} = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
+                                            'numberofpainactivecolumns',numberofpainactivecolumns, ...
+                                            'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
+                                            'numberofcolumnsinmask',numberofcolumnsinmask);
+            
+        %         estimate model params of active columns
+                topcolumnnumber=200; %200 or 100?
+               
+                [top200Values, top200Indices] =maxk(columnwisestat.T(:,ROI,3),topcolumnnumber);
+        
+                % Filter the indices where the values are positive
+                positiveIndices = top200Indices(top200Values > 0);
+                % Check if any negative values were removed
+                if length(positiveIndices) < topcolumnnumber
+                    warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
+                end
+                layerts=layeractivation{ROI,1};
+        %         tic
+                sz=size(layerts);
+                layerts_significant=mean(layerts(positiveIndices,:,:),1); %,'omitnan'
+                layerts_significant=squeeze(layerts_significant);
+        %         layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
+                [T,Tcrit,beta,pmax] = BK_layer_analysis_stats_roicell(layerts_significant,subid,subpath);
+                layerwisestat{ROI} = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
+        %         layerwisestat = [];
+            end
+    
+        
+            fprintf('time for laminar activation:')
+            toc
         end
         
-        columndistribution{ROI} = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
-                                    'numberofpainactivecolumns',numberofpainactivecolumns, ...
-                                    'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
-                                    'numberofcolumnsinmask',numberofcolumnsinmask);
-    
-        topcolumnnumber=200; %200 or 100?
-       
-        [top200Values, top200Indices] =maxk(columnwisestat.T(:,ROI,3),topcolumnnumber);
-
-        % Filter the indices where the values are positive
-        positiveIndices = top200Indices(top200Values > 0);
-        % Check if any negative values were removed
-        if length(positiveIndices) < topcolumnnumber
-            warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
+%         interimdata=struct('columnwisestat',columnwisestat,'layerwisestat',layerwisestat,'allroicolumnsize',allroicolumnsize,'activevoxelids',activevoxelsid);
+        
+%         save([outputpath 'interimdata_rwls.mat'],'interimdata');
+        if visualize
+            layer_boundaries = VPF_load_layer_boundaries(subid,fspath);
+            [layer_boundaries,~] = VPF_transform_layers_to_matlab_space(layer_boundaries,T1path);
+            ROIs = BK_convert_load_ROIs(subid,roipath,fspath,size(layer_boundaries,1));
+%             load([outputpath 'interimdata_rwls.mat']);
+%             activevoxelsid=interimdata.activevoxelids;
+            BK_plotactiveclusterscolumn(T1path,ROIs,activevoxelsid,layer_boundaries,outputpath)
         end
-        layerts=layeractivation{ROI,1};
 
-        sz=size(layerts);
-        layerts_significant=mean(layerts(positiveIndices,:,:),1); %,'omitnan'
-        layerts_significant=squeeze(layerts_significant);
-%         layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
-        [T,Tcrit,beta,pmax] = BK_layer_analysis_stats_roicell(layerts_significant,subid,subpath);
-        layerwisestat{ROI} = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-%         layerwisestat = [];
-    end
-
-    
-        fprintf('time for laminar activation:')
-        toc
-
-
-
-%     %% S1 stuff
-%     if strcmp(region,'S1')
-%         load([outputpath 'interimdata_rwls.mat'],'interimdata_columns')
-%         columnspecificts=interimdata_columns.columnspecificts;
-%         sz=size(columnspecificts);
-%         if sz(3)~=1221
-%             warning('The ts is shorter!!! why?')
-%         end
-%         layeractivation=interimdata_columns.layeractivation;
-%         columnsize=interimdata_columns.allroicolumnsize;
-%         %-----------------------------------------------------------------------------------------------%
-%         %Play around with the data a bit:
-%         % check if the profile depends on the way we select the voxels:
-% %             wholecolumnactivation=mean(layeractivation(:,10:20,:,:),2);
-% %             [ncol,~,~,tslengt]=size(layeractivation);
-% %             wholecolumnactivationts=reshape(wholecolumnactivation,ncol,1,tslengt);%size(muki)
-% %             [T,Tcrit,beta,pmax] = BK_column_analysis_stats(wholecolumnactivationts,subid,subpath);
-%         %-----------------------------------------------------------------------------------------------%
-%         [T,Tcrit,beta,pmax] = BK_column_analysis_stats(columnspecificts,subid,subpath);
-%         T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
-%         columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-% 
-% %         interimdata_columns=struct('columnwisestat',columnwisestat,'columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
-% %         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
-%         
-% 
-%         numberofcolumnsinmask=length(columnsize);
-%         tthrsss=[0 1];
-%         thrsidx=0;
-%         for tthrs=tthrsss
-%             thrsidx=thrsidx+1;
-%             numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,1,1)>tthrs);
-%             
-%             numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,1,2)>tthrs);
-%             
-%             numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,1,3)>tthrs);
-%             activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
-% %             disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
-% %             disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
-% %             disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
-% %             disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
-%         end
-%         
-%         columndistribution = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
-%                                     'numberofpainactivecolumns',numberofpainactivecolumns, ...
-%                                     'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
-%                                     'numberofcolumnsinmask',numberofcolumnsinmask);
-% 
-% %         estimate model params of active columns
-%         topcolumnnumber=200; %200
-%        
-%         [top200Values, top200Indices] =maxk(columnwisestat.T(:,1,3),topcolumnnumber);
-% 
-%         % Filter the indices where the values are positive
-%         positiveIndices = top200Indices(top200Values > 0);
-%         % Check if any negative values were removed
-%         if length(positiveIndices) < topcolumnnumber
-%             warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
-%         end
-%     
-% %         tic
-%         sz=size(layeractivation);
-%         layerts_significant=mean(layeractivation(positiveIndices,:,:,:),1,'omitnan'); 
-%         layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
-%         [T,Tcrit,beta,pmax] = BK_layer_analysis_stats(layerts_significant_forfunc,subid,subpath);
-%         layerwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-% %         layerwisestat = [];
-%     %% pIns stuff
-%     elseif strcmp(region,'pIns')
-%         load([outputpath 'interimdata_rwls_pIns.mat'],'interimdata_columns')
-%         columnspecificts=interimdata_columns{1};
-%         sz=size(columnspecificts{1,1});
-%         if sz(2)~=1221
-%             warning('The ts is shorter!!! why?')
-%         end
-%         layeractivation=interimdata_columns{2};
-%         columnsize=interimdata_columns{3};
-%         [T,Tcrit,beta,pmax] = BK_column_analysis_stats_roicell(columnspecificts,subid,subpath);
-%         T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
-%         columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-% 
-% %         interimdata_columns=struct('columnwisestat',columnwisestat,'columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
-% %         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
-%         
-%         for ROI=1:length(layeractivation)
-%             numberofcolumnsinmask=length(columnsize{ROI,1});
-%             tthrsss=[0 1];
-%             thrsidx=0;
-%             for tthrs=tthrsss
-%                 thrsidx=thrsidx+1;
-%                 numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,ROI,1)>tthrs);
-%                 
-%                 numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,ROI,2)>tthrs);
-%                 
-%                 numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,ROI,3)>tthrs);
-%                 activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
-%                 disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
-%             end
-%             
-%             columndistribution{ROI} = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
-%                                         'numberofpainactivecolumns',numberofpainactivecolumns, ...
-%                                         'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
-%                                         'numberofcolumnsinmask',numberofcolumnsinmask);
-%         
-%     %         estimate model params of active columns
-%             topcolumnnumber=200; %200 or 100?
-%            
-%             [top200Values, top200Indices] =maxk(columnwisestat.T(:,ROI,3),topcolumnnumber);
-%     
-%             % Filter the indices where the values are positive
-%             positiveIndices = top200Indices(top200Values > 0);
-%             % Check if any negative values were removed
-%             if length(positiveIndices) < topcolumnnumber
-%                 warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
-%             end
-%             layerts=layeractivation{ROI,1};
-%     %         tic
-%             sz=size(layerts);
-%             layerts_significant=mean(layerts(positiveIndices,:,:),1); %,'omitnan'
-%             layerts_significant=squeeze(layerts_significant);
-%     %         layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
-%             [T,Tcrit,beta,pmax] = BK_layer_analysis_stats_roicell(layerts_significant,subid,subpath);
-%             layerwisestat{ROI} = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-%     %         layerwisestat = [];
-%         end
-% 
-%     
-%         fprintf('time for laminar activation:')
-%         toc
-%     elseif strcmp(region,'S2')
-%         load([outputpath 'interimdata_rwls_S2.mat'],'interimdata_columns')
-%         columnspecificts=interimdata_columns{1};
-%         sz=size(columnspecificts{1,1});
-%         if sz(2)~=1221
-%             warning('The ts is shorter!!! why?')
-%         end
-%         layeractivation=interimdata_columns{2};
-%         columnsize=interimdata_columns{3};
-%         [T,Tcrit,beta,pmax] = BK_column_analysis_stats_roicell(columnspecificts,subid,subpath);
-%         T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
-%         columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-% 
-% %         interimdata_columns=struct('columnwisestat',columnwisestat,'columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
-% %         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
-%         
-%         for ROI=1:length(layeractivation)
-%             numberofcolumnsinmask=length(columnsize{ROI,1});
-%             tthrsss=[0 1];
-%             thrsidx=0;
-%             for tthrs=tthrsss
-%                 thrsidx=thrsidx+1;
-%                 numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,ROI,1)>tthrs);
-%                 
-%                 numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,ROI,2)>tthrs);
-%                 
-%                 numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,ROI,3)>tthrs);
-%                 activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
-%                 disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
-%             end
-%             
-%             columndistribution{ROI} = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
-%                                         'numberofpainactivecolumns',numberofpainactivecolumns, ...
-%                                         'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
-%                                         'numberofcolumnsinmask',numberofcolumnsinmask);
-%         
-%     %         estimate model params of active columns
-%             topcolumnnumber=200; %200 or 100?
-%            
-%             [top200Values, top200Indices] =maxk(columnwisestat.T(:,ROI,3),topcolumnnumber);
-%     
-%             % Filter the indices where the values are positive
-%             positiveIndices = top200Indices(top200Values > 0);
-%             % Check if any negative values were removed
-%             if length(positiveIndices) < topcolumnnumber
-%                 warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
-%             end
-%             layerts=layeractivation{ROI,1};
-%     %         tic
-%             sz=size(layerts);
-%             layerts_significant=mean(layerts(positiveIndices,:,:),1); %,'omitnan'
-%             layerts_significant=squeeze(layerts_significant);
-%     %         layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
-%             [T,Tcrit,beta,pmax] = BK_layer_analysis_stats_roicell(layerts_significant,subid,subpath);
-%             layerwisestat{ROI} = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-%     %         layerwisestat = [];
-%         end
-% %%
-%       elseif strcmp(region,'DLPFC')
-%         load([outputpath 'interimdata_rwls_DLPFCraw.mat'],'interimdata_columns')
-%         columnspecificts=interimdata_columns{1};
-%         sz=size(columnspecificts{1,1});
-%         if sz(2)~=1221
-%             warning('The ts is shorter!!! why?')
-%         end
-%         layeractivation=interimdata_columns{2};
-%         columnsize=interimdata_columns{3};
-%         [T,Tcrit,beta,pmax] = BK_column_analysis_stats_roicell_dlpfc(columnspecificts,subid,subpath);
-%         T(:,:,3)=min(T(:,:,:),[],3); %conjuction analysis columnwise. In the third dimension, 1-cognition(lc-hc), 2-
-%         columnwisestat = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-% 
-% %         interimdata_columns=struct('columnwisestat',columnwisestat,'columnspecificts',columnspecificts,'layeractivation',layeractivation,'allroicolumnsize',allroicolumnsize);
-% %         save([outputpath 'interimdata_rwls.mat'],'interimdata_columns');
-%         
-%         for ROI=1:length(layeractivation)
-%             numberofcolumnsinmask=length(columnsize{ROI,1});
-%             tthrsss=[0 1];
-%             thrsidx=0;
-%             for tthrs=tthrsss
-%                 thrsidx=thrsidx+1;
-%                 numberofcognactivcolumn(thrsidx)=sum(columnwisestat.T(:,ROI,1)>tthrs);
-%                 
-%                 numberofpainactivecolumns(thrsidx)=sum(columnwisestat.T(:,ROI,2)>tthrs);
-%                 
-%                 numberofactcolumnsbasedonconj(thrsidx)=sum(columnwisestat.T(:,ROI,3)>tthrs);
-%                 activevoxelsid=find((columnwisestat.T(:,1,3)>tthrs));
-%                 disp(['Subject:' subid 'The number of columns within the funcitonal mask: ',num2str(numberofcolumnsinmask)])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition: ',num2str(numberofcognactivcolumn(thrsidx))])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for pain: ',num2str(numberofpainactivecolumns(thrsidx))])
-%                 disp(['Subject:' subid 'The number of columns acitvating in each run(t>', num2str(tthrs), ') for cognition AND pain: ',num2str(numberofactcolumnsbasedonconj(thrsidx))])
-%             end
-%             
-%             columndistribution{ROI} = struct('numberofcognactivcolumn',numberofcognactivcolumn, ...
-%                                         'numberofpainactivecolumns',numberofpainactivecolumns, ...
-%                                         'numberofactcolumnsbasedonconj',numberofactcolumnsbasedonconj, ...
-%                                         'numberofcolumnsinmask',numberofcolumnsinmask);
-%         
-%     %         estimate model params of active columns
-%             topcolumnnumber=200; %200 or 100?
-%            
-%             [top200Values, top200Indices] =maxk(columnwisestat.T(:,ROI,3),topcolumnnumber);
-%     
-%             % Filter the indices where the values are positive
-%             positiveIndices = top200Indices(top200Values > 0);
-%             % Check if any negative values were removed
-%             if length(positiveIndices) < topcolumnnumber
-%                 warning('The top 200 values contained negative numbers. Only %d positive values are retained.', length(positiveIndices));
-%             end
-%             layerts=layeractivation{ROI,1};
-%     %         tic
-%             sz=size(layerts);
-%             layerts_significant=mean(layerts(positiveIndices,:,:),1); %,'omitnan'
-%             layerts_significant=squeeze(layerts_significant);
-%     %         layerts_significant_forfunc=reshape(layerts_significant,[sz(2), sz(3),sz(4)]);
-%             [T,Tcrit,beta,pmax] = BK_layer_analysis_stats_roicell_dlpfc(layerts_significant,subid,subpath);
-%             layerwisestat{ROI} = struct('beta',beta,'T',T,'T_crit',Tcrit,'p_max',pmax);
-%         end
-% 
-%     
-%         fprintf('time for laminar activation:')
-%         toc
-%     end
-%     
-% %         interimdata=struct('columnwisestat',columnwisestat,'layerwisestat',layerwisestat,'allroicolumnsize',allroicolumnsize,'activevoxelids',activevoxelsid);
-%     
-% %         save([outputpath 'interimdata_rwls.mat'],'interimdata');
-%     if visualizationtype
+%     elseif exist([outputpath 'interimdata_rwls.mat'],'file') && visualize
+%         %% visualize activated columns in matlab:
 %         layer_boundaries = VPF_load_layer_boundaries(subid,fspath);
 %         [layer_boundaries,~] = VPF_transform_layers_to_matlab_space(layer_boundaries,T1path);
 %         ROIs = BK_convert_load_ROIs(subid,roipath,fspath,size(layer_boundaries,1));
-% %             load([outputpath 'interimdata_rwls.mat']);
-% %             activevoxelsid=interimdata.activevoxelids;
+%         load([outputpath 'interimdata_rwls.mat']);
+%         activevoxelsid=interimdata.activevoxelids;
 %         BK_plotactiveclusterscolumn(T1path,ROIs,activevoxelsid,layer_boundaries,outputpath)
+%     else exist([outputpath 'interimdata_rwls.mat'],'file')
+%         warning('The interimfile does already exist, and no visualization was selected. Load and play!')
 %     end
-% 
-
 
 end
 %% load layers function 
@@ -796,7 +707,7 @@ function [T,T_crit,beta,p_max]=BK_column_analysis_stats_roicell(columnspecificts
 %                 con(ii+2) = 1;
                 contastofinterest=contrasts(idxcontastofinterest);
                 if contrasts(idxcontastofinterest)<5
-                    reversefact=-1; %this would mean that the activation is lower in the high cognition condition, that is higher in the low cognitive load. In other words, some supression occured in the high cognitive load condition.
+                    reversefact=-1; %this would mean that the activation is lower in the high cognition condition.
                 else
                     reversefact=1;
                 end
@@ -812,99 +723,6 @@ function [T,T_crit,beta,p_max]=BK_column_analysis_stats_roicell(columnspecificts
                  T_crit(ROI,idxcontastofinterest),...
                  beta(1:columnsss(ROI),ROI,idxcontastofinterest),... %this should be a cell array instead of a matrix as the number of columns iwhtin a ROI most porbably change.
                  p_max(ROI,idxcontastofinterest)] = BK_Tmap_from_SPM_columns(SPM,b,ResMS,con,0.05,'FDR');
-            end
-        end
-%     end
-    % end
-    
-%     rwls_results = struct('beta',beta,'T',T,'T_crit',T_crit,'p_max',p_max);
-%     save([layerpath '/rwls_results.mat'],'rwls_results');
-end
-% column wise - multiple ROI as cell for normal contrast (e.g.DLPFC)
-function [T,T_crit,beta,p_max]=BK_column_analysis_stats_roicell_dlpfc(columnspecificts,subid,subpath,ZTRANS)%subpath,ZTRANS)
-
-    if nargin < 4
-        ZTRANS = false;
-    end
-    % layerpath = [subpath '/ses-02/func/layers'];
-    % load([layerpath '/layers.mat'],'layers');
-    
-%     [N_columns,N_ROIS,~] = size(columnspecificts);
-    N_ROIS=size(columnspecificts,1);
-    contrasts = [4 8]; %main effects --> calculate later come conjunction stuff?, I would go now with the average effect, and not with the individual run effects.
-    N_contrasts=length(contrasts);
-    for roi=1:N_ROIS
-        columnsss(roi)=size(columnspecificts{roi,1},1);
-    end
-    N_columns=max(columnsss);
-    % T = zeros(N_columns,N_ROIS,N_runs,N_contrasts,2); % 2 for no_compcor vs compcor
-    % beta = zeros(N_columns,N_ROIS,N_runs,N_contrasts,2);
-    % T_crit = zeros(N_ROIS,N_runs,N_contrasts,2);
-    % p_max = zeros(N_ROIS,N_runs,N_contrasts,2);
-    
-    %maybe implement 
-    
-    % for run = 1:N_runs
-%     statspath = dir(['E:\pain_layers\main_project\derivatives\pipeline\' num2str(subid) '/ses-02/func/layers/*_stats_compcor_UNsmoothed_hpf180']);
-    statspath = dir([subpath num2str(subid) '/ses-02/func/layers/rwls_stats_compcor_UNsmoothed_hpf180']);
-    % "E:\pain_layers\main_project\derivatives\pipeline\7349\ses-02\func\layers\rwls_stats_compcor_UNsmoothed_hpf180"
-
-%     for folder = 1:length(statspath)
-%         load([statspath(folder).folder '/' statspath(folder).name '/SPM.mat'],'SPM');
-        load([statspath(1).folder '/SPM.mat'],'SPM');
-        W = SPM.xX.W;
-        GLM = SPM.xX.pKX;
-        T = nan(N_columns,N_ROIS,N_contrasts); 
-        beta = nan(N_columns,N_ROIS,N_contrasts);
-        T_crit = nan(N_ROIS,N_contrasts);
-        p_max = nan(N_ROIS,N_contrasts);
-%         con = zeros(size(GLM,1),1);
-        for ROI = 1:N_ROIS
-            
-            Y = squeeze(columnspecificts{ROI,1}); %in the original pipeline, the size of Y is layernnum X tslength.
-            Y = Y(:,any(Y ~= 0, 1)); %selects only the columns(rows in this matrix) where at least one element is non-zero, effectively removing all-zero columns from Y
-            if ZTRANS
-                %baseline z-transform. I take the volumes corresponding
-                % to 0 in the sum of all pain trials as baseline
-                idx = find(sum(SPM.xX.X(:,3:22),2)==0);
-                m = mean(Y(:,idx),2);
-                s = std(Y(:,idx),[],2);
-                Y = (Y-m)./s;
-            end
-    
-            KWY = spm_filter(SPM.xX.K,W*Y.');
-            b   = GLM*KWY;
-    
-            res      = spm_sp('r',SPM.xX.xKXs,KWY);        %-Residuals
-            ResSS    = sum(res.^2);                    %-Residual SSQ
-            ResMS = ResSS / SPM.xX.trRV;
-            if any(ResSS==0)
-                disp('The residual SSQ contains 0 elements!!!!!!!')
-            end
-            for idxcontastofinterest = 1:numel(contrasts)
-                %We always assume a one-sided effect, i.e. for ROIs where
-                %the localizer showed a negative effect, we assume that mu < 0.
-                
-%                 con(con==1) = 0;
-%                 con(ii+2) = 1;
-                contastofinterest=contrasts(idxcontastofinterest);
-%                 if contrasts(idxcontastofinterest)<5
-%                     reversefact=-1; %this would mean that the activation is lower in the high cognition condition.
-%                 else
-%                     reversefact=1;
-%                 end
-                %     {'anticipation_high_cognition'}
-                %     {'anticipation_low_cognition' }
-                %     {'pain_high_cogn_high_pain'   }
-                %     {'pain_high_cogn_low_pain'    }
-                %     {'pain_low_cogn_high_pain'    }
-                %     {'pain_low_cogn_low_pain'     }
-                %     {'rating'                     }
-                con=SPM.xCon(contastofinterest).c; 
-                [T(1:columnsss(ROI),ROI,idxcontastofinterest),...
-                 T_crit(ROI,idxcontastofinterest),...
-                 beta(1:columnsss(ROI),ROI,idxcontastofinterest),... %this should be a cell array instead of a matrix as the number of columns iwhtin a ROI most porbably change.
-                 p_max(ROI,idxcontastofinterest)] = BK_Tmap_from_SPM_columns(SPM,b,ResMS,con,0.05,'none'); %quick and dirty solution would be to change this to 'none'
             end
         end
 %     end
@@ -1132,58 +950,6 @@ function [T,T_crit,beta,p_max]=BK_layer_analysis_stats_roicell(laminarts,subid,s
     
 %     rwls_results = struct('beta',beta,'T',T,'T_crit',T_crit,'p_max',p_max);
 %     save([layerpath '/rwls_results.mat'],'rwls_results');
-end
-
-function [T,T_crit,beta,p_max]=BK_layer_analysis_stats_roicell_dlpfc(laminarts,subid,subpath,ZTRANS)%subpath,ZTRANS)
-    if nargin < 4
-        ZTRANS = false;
-    end
-    
-    [N_layer,~] = size(laminarts);
-    
-    contrasts = [4 8];
-    N_contrasts=length(contrasts);
-    
-    T = zeros(N_layer,N_contrasts); 
-    beta = zeros(N_layer,N_contrasts);
-    T_crit = zeros(N_contrasts,1);
-    p_max = zeros(N_contrasts,1);
-    
-    statspath = dir([subpath num2str(subid) '/ses-02/func/layers/rwls_stats_compcor_UNsmoothed_hpf180']);
-        load([statspath(1).folder '/SPM.mat'],'SPM');
-    
-        W = SPM.xX.W;
-        GLM = SPM.xX.pKX;
-
-            Y = squeeze(laminarts(:,:)); %in the original pipeline, the size of Y is layernnum X tslength.
-            Y = Y(:,any(Y ~= 0, 1)); %selects only the columns where at least one element is non-zero, effectively removing all-zero columns from Y
-            if ZTRANS
-                %baseline z-transform. I take the volumes corresponding
-                % to 0 in the sum of all pain trials as baseline
-                idx = find(sum(SPM.xX.X(:,3:22),2)==0);
-                m = mean(Y(:,idx),2);
-                s = std(Y(:,idx),[],2);
-                Y = (Y-m)./s;
-            end
-    
-            KWY = spm_filter(SPM.xX.K,W*Y.');
-            b   = GLM*KWY;
-    
-            res      = spm_sp('r',SPM.xX.xKXs,KWY);        %-Residuals
-            ResSS    = sum(res.^2);                    %-Residual SSQ
-            ResMS = ResSS / SPM.xX.trRV;
-    
-
-            for idxcontastofinterest = 1:numel(contrasts)
-                contastofinterest=contrasts(idxcontastofinterest);
-                con=SPM.xCon(contastofinterest).c;
-                
-                [T(:,idxcontastofinterest),...
-                 T_crit(idxcontastofinterest),...
-                 beta(:,idxcontastofinterest),... %this should be a cell array instead of a matrix as the number of columns iwhtin a ROI most porbably change.
-                 p_max(idxcontastofinterest)] = BK_Tmap_from_SPM_columns(SPM,b,ResMS,con,0.05,'FDR');
-            end
-
 end
 
 %% calculate columnwise t-values
