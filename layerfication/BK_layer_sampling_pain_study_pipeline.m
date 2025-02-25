@@ -1,4 +1,4 @@
-function [columnwisestat,columndistribution,layerwisestat]=BK_layer_sampling_pain_study_pipeline(subid,aim,region,samplingtype,visualizationtype)
+function [columnwisestat,layerwisestat]=BK_layer_sampling_pain_study_pipeline(subid,aim,region,samplingtype,visualizationtype,typeofcon)
 % This is a modified script of VPF's same function. 
 % I removed many part of it. Thos parts which has saved the output in a
 % permanent location (in the external HDs), were removed. Additionally,
@@ -36,7 +36,7 @@ function [columnwisestat,columndistribution,layerwisestat]=BK_layer_sampling_pai
 %   region [char]:              specify the ROI. e.g.: S1,S2,pIns, DLPFC. The indiviudal ROI must be in the input folder of the subject as an .nii file (mind unzipping!)
 %   samplingtype [char]:        raw/derived - specify the images which should be sampled. The raw ts data OR the already derived images ß/t. 
 %   visualizationtype [char]:   no, onlyROI, ROI, sampledROI, . - specify whether a visualization of the surface points should be outputted. The onlyROI/ROI should be used with sampling and sampledROI should be used with glmestimation.
-%                                   no - no visualization is done
+%                                   no - NO visualization is done
 %                                   onlyROI - (should be used with aim==sample) no sampling is done, only the visualization of the ROI.
 %                                   ROI - (should be used with aim==sample) whole ROI mask is visualized
 %                                   sampledROI - (should be used with aim==glmestimate) is a subset of the indiviudal functional mask from which the sampling was done
@@ -80,7 +80,9 @@ tic
     end
     if subid{1}==7356
         T1path = [subpath num2str(subid{1}) '' ...
-              '\ses-01\anat\presurf_MPRAGEise\presurf_UNI\UNI_MPRAGEised_biascorrected.nii'];        
+            '\ses-01\anat\presurf_MPRAGEise\presurf_UNI\UNI_MPRAGEised_biascorrected.nii'];
+%             '\ses-02\func\layers\run1\func\mag_POCS_r1_1000_Warped-to-Anat.nii.gz'];
+                      
     else
         T1path = [subpath num2str(subid{1}) '' ...
               '\ses-01\anat\presurf_MPRAGEise\presurf_UNI\UNI_MoCo_MPRAGEised_biascorrected.nii'];
@@ -96,7 +98,7 @@ tic
             BK_ROI_creation_GROUPLVLactivationconj(subid{1},subpath,fspath,T1path,visualizationtype,region,samplingtype); % visualization!!!the 5th argument.
 
         elseif strcmp(aim,'glmestimate')
-            [columnwisestat,columndistribution,layerwisestat]=BK_firstlvlanalysis(subid{1},subpath,fspath,T1path,visualizationtype,region); %no visualization
+            [columnwisestat,layerwisestat]=BK_firstlvlanalysis(subid{1},subpath,fspath,T1path,visualizationtype,region,typeofcon); %no visualization            
         else
             warning('Nothing was selected!')
         end

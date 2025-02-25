@@ -1,7 +1,7 @@
-function [columnwisestat,layerwisestat] = BK_firstlvlanalysis(subid,subpath,fspath,T1path,visualizationtype,region,typeofcon)
-% This funtion is called by the BK_layer_sampling_pain_study_pipeline
-% function. The aim of this function is to do parameter estimation of columnar and layer level
-% information per subject level. The input of this data is saved in the indiviudal files as
+function [columnwisestat,columndistribution,layerwisestat] = BK_firstlvlanalysis(subid,subpath,fspath,T1path,visualizationtype,region,typeofcon)
+% This funtion was called previously by the BK_layer_sampling_pain_study_pipeline
+% function. Now the layervalues.m calls it. The aim of this function is to do parameter estimation of columnar and layer level
+% information. The input of this data is saved in the indiviudal files as
 % interimdata_rwls_'ROINAME'(raw/derived).mat. This contains many information (see deatils in the corresponding fucntion) 
 % regarding vertex wise (only taking the deeper 75% of column) timeseries, laminar timeseries from each vertex from the functinoal ROI, and the size of the
 % mask (as the number of vertices). The script process ROI wise information for left and right side separately.
@@ -27,14 +27,13 @@ function [columnwisestat,layerwisestat] = BK_firstlvlanalysis(subid,subpath,fspa
 % of conjucntion (painlvl,cognlvl- the conjucntion of the effect of
 % pain/cognition in each level of cognition/pain). Also the contrasts of the laminea can be speccified: it can be the main effect, but each condition separatly is also possible.
 %OUTPUT:
-%   columnwisestat: [2x1 struct]: ß,T,T_crit,Pmax. it contains the fitted
-% first lvl ß parameter estimates for all the veritces(e.g.: ß - # of columns X # of contrast) +optional statistical
+%   columnwisestat: (2x1 struct): ß,T,T_crit,Pmax. it contains the fitted
+% first lvl ß parameter estimates for all the veritces+optional statistical
 % test result (e.g.: oncjunction analysis for selection of columns)
-% 
-%   layerwisestat: [2x1 cell]:  ß,T,T_crit,p_max. it contains the fitted
-%   first lvl ß parameter estimated for all layers (sampled from the most
-%   active columns, and averaged timeseries). e.g.: ß- # of layers X # of
-%   contrasts
+%   columndistribution: 
+% ,layerwisestat
+% activatedcolumns [column_index N_ROI contrastofinterest(cogn,pain)
+% N_estimation(reml,rwsl)] : the fitted 
 %
 % Example call:
 % [columnwisestat,columndistribution,layerwisestat]=BK_firstlvlanalysis(subid{:},subpath,fspath,T1path,0,region)

@@ -32,11 +32,17 @@ function BK_ROI_creation_GROUPLVLactivationconj(subid,subpath,fspath,T1path,visu
 % visualize
 % region
 % sampledimg
-%OUTPUTs:
-% a saved file in the indiviudal local folder 
+%OUTPUTs: a saved file in the indiviudal local folder (hardcoded, see
+%below)
+% interimdata_columns [1x3cell array] : 
+%           columnspecificts {N_ROIx1} [N_columns N_totalvol]: for each side (always left - right, otherwise the script would inform) the timesseries
+%               of the deeper 75% of all vertices from the mask.
+%           layeractivation {N_ROI x1} [N_columns N_layers N_totalvol]: for each side, the
+%           timeseries of all layers of all vertices from the mask.
+%           allroicolumnsize {N_ROI} the "columnar thickness" for all the
+%           vertices in the mask. It is in mm!
+% The output is the input of the BK_firslvlanalysis fucntion.
 %
-% 
-% 
 % Balint Kincses
 % 12.2024
     if ~ischar(subid)
@@ -123,16 +129,23 @@ function layer_boundaries = VPF_load_layer_boundaries(subid,fspath)
     %vertex (starting from left hemisphere and continou with right hemishpere)
     %and teh 3rd dimension contains white matter and pial information.
     fn = [fspath '\' subid '\surf\lh.white'];
-    layer_boundaries = read_surf(fn);
-    fn = [fspath '\' subid '\surf\rh.white'];
-    tmp = read_surf(fn);
+    if strcmp(subid,'7356')
+        asciiload=1; %it does not really change as the header is not readable
+    else
+        asciiload=0;
+    end
+    layer_boundaries = read_surf(fn,asciiload);
+    fn = [fspath '\' subid '\surf\rh.white']; 
+    tmp = read_surf(fn,asciiload);
+ 
     layer_boundaries  = cat(1,layer_boundaries ,tmp);
     
     
     fn = [fspath '\' subid '\surf\lh.pial'];
-    tmp = read_surf(fn);
+    tmp = read_surf(fn,asciiload);
+
     fn = [fspath '\' subid '\surf\rh.pial'];
-    tmp = cat(1,tmp,read_surf(fn));
+    tmp = cat(1,tmp,read_surf(fn,asciiload));
     layer_boundaries = cat(3,layer_boundaries,tmp);
 
 end
@@ -266,9 +279,12 @@ function [layer_boundaries, T1_mat,old_layer_boudnaries ] = VPF_transform_layers
     
     %bring surfaces into matlab space
     T1_mat = spm_get_space(T1path); %Get/set the voxel-to-world mapping of an image
+    old_layer_boudnaries=layer_boundaries ; %just to compare them for transformation
+
     boundaries_2_cat = ones([sz(1) 1 sz(end)]);
     layer_boundaries = cat(2,layer_boundaries,boundaries_2_cat);
-    old_layer_boudnaries=layer_boundaries ;
+    
+
     for ii = 1:sz(end)
         tmp = T1_mat\squeeze(layer_boundaries(:,:,ii)).'; 
         %  \ - left matrix division (also known as the backslash operator):
@@ -279,7 +295,40 @@ function [layer_boundaries, T1_mat,old_layer_boudnaries ] = VPF_transform_layers
     end
     
     layer_boundaries= layer_boundaries(:,1:3,:);
-
+        %for subject 7356,rotation issue - solved with an additional
+        %translation when creating the .gii file. see detailed description
+        %of the issue and its solution in my documentation.
+% %        img_T1 = spm_read_vols(spm_vol(T1path));
+% % %        img_func=spm_read_vols(spm_vol('E:\pain_layers\main_project\derivatives\pipeline\7356\ses-02\func\layers\run1\func\mag_POCS_r1_1000_Warped-to-Anat.nii.gz'));
+%     for slice = 180 %205
+%         %this is the y direction/AP
+%         idx = find(layer_boundaries(:,1,1)>slice & layer_boundaries(:,1,1)<slice+2);
+%         idx3 = find(layer_boundaries(:,1,2)>slice & layer_boundaries(:,1,2)<slice+2);
+%     
+%         figure;imagesc(squeeze(img_T1(slice,:,:)), [0 1200]), colormap(gray(256)), title(['Slice ' num2str(slice)])
+% %         figure;imagesc(squeeze(img_func(:,:,slice)), [0 1200]), colormap(gray(256)), title(['Slice ' num2str(slice)])
+%         hold on;
+%     
+%         plot(layer_boundaries(idx,3,1),layer_boundaries(idx,2,1),'r.');
+%         plot(layer_boundaries(idx3,3,2),layer_boundaries(idx3,2,2),'y.');
+%     
+%         legend('white','pial');
+%         hold off
+%         %this is the z direction
+%         slice=250;
+%         idx = find(layer_boundaries(:,2,1)>slice & layer_boundaries(:,2,1)<slice+2);
+%         idx3 = find(layer_boundaries(:,2,2)>slice & layer_boundaries(:,2,2)<slice+2);
+%     
+%         figure;imagesc(squeeze(img_T1(:,slice,:)), [0 1200]), colormap(gray(256)), title(['Slice ' num2str(slice)])
+% %         figure;imagesc(squeeze(img_func(:,:,slice)), [0 1200]), colormap(gray(256)), title(['Slice ' num2str(slice)])
+%         hold on;
+%     
+%         plot(layer_boundaries(idx,3,1),layer_boundaries(idx,1,1),'r.');
+%         plot(layer_boundaries(idx3,3,2),layer_boundaries(idx3,1,2),'y.');
+%         hold off
+% 
+%         %this is the x direction
+%     end
 end
 
 %% sample columnswise information based on ROI in the raw fmri data (output is ts) - it is checked,keep it
@@ -306,8 +355,8 @@ function [columns_out,layers_out,allroicolumnsize] = BK_select_active_columns_ba
 %N_layers [int]             : number of layers (default: 20)
 %T1_mat : affine matrix of T1img
 %OUTPUT:
-% columns_out [N_columns N_ROI N_totalvol]
-% layer_out [N_columns N_layers N_ROI N_totalvol]
+% columns_out {N_ROIx1} [N_columns  N_totalvol]
+% layer_out {N_ROI x1} [N_columns N_layers N_totalvol]
 % allroicolumnsize {N_ROI} the distribution of the columnar thickness
 
     currpath = pwd;
